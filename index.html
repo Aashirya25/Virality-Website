@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Sentiment → Virality Predictor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f172a, #020617);
+            color: #e5e7eb;
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 820px;
+            background: #020617;
+            border-radius: 16px;
+            padding: 28px 32px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 6px;
+            font-size: 1.8rem;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 110px;
+            resize: vertical;
+            padding: 12px;
+            border-radius: 10px;
+            border: none;
+            font-size: 0.95rem;
+            background: #0f172a;
+            color: #e5e7eb;
+            outline: none;
+        }
+
+        textarea::placeholder {
+            color: #64748b;
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 14px;
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        .status {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 28px;
+        }
+
+        .panel {
+            background: #020617;
+            border-radius: 14px;
+            padding: 18px;
+            border: 1px solid #1e293b;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            background: #1e293b;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.85rem;
+            color: #cbd5f5;
+        }
+
+        img {
+            width: 100%;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+
+        .explanation {
+            margin-top: 12px;
+            font-size: 0.9rem;
+            color: #cbd5f5;
+            opacity: 0.9;
+            font-style: italic;
+        }
+
+        @media (max-width: 720px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>Sentiment → Virality Predictor</h1>
+        <div class="subtitle">
+            Analyze an Instagram caption using a fine‑tuned BERT model and simulate
+            its potential virality over time using an SEIR‑based diffusion model.
+        </div>
+
+        <label for="caption">Instagram caption</label>
+        <textarea id="caption" placeholder="Paste an Instagram caption or news-style headline here..."></textarea>
+
+        <div class="actions">
+            <button id="runBtn">Analyze</button>
+            <span id="status" class="status"></span>
+        </div>
+
+        <div class="grid">
+            <div class="panel">
+                <p><strong>Predicted sentiment</strong></p>
+                <div id="sentiment" class="pill">—</div>
+
+                <p style="margin-top: 14px;"><strong>Class probabilities</strong></p>
+                <div id="probs" class="mono">—</div>
+            </div>
+
+            <div class="panel">
+                <p><strong>SEIR virality simulation</strong></p>
+                <img id="chart" style="display:none;" />
+                <p id="explanation" class="explanation" style="display:none;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const runBtn = document.getElementById("runBtn");
+        const statusEl = document.getElementById("status");
+
+        runBtn.onclick = async () => {
+            const text = document.getElementById("caption").value.trim();
+
+            if (!text) {
+                statusEl.textContent = "Please enter a caption.";
+                return;
+            }
+
+            statusEl.textContent = "Analyzing…";
+
+            try {
+                const response = await fetch("http://localhost:8000/api/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Backend error");
+                }
+
+                const data = await response.json();
+
+                document.getElementById("sentiment").textContent = data.label;
+                document.getElementById("probs").textContent =
+                    data.probs.map(p => p.toFixed(3)).join(", ");
+
+                if (data.img) {
+                    const img = document.getElementById("chart");
+                    img.src = data.img;
+                    img.style.display = "block";
+                } else {
+                    document.getElementById("chart").style.display = "none";
+                }
+
+                const explanationEl = document.getElementById("explanation");
+
+                if (data.explanation) {
+                    explanationEl.textContent = data.explanation;
+                    explanationEl.style.display = "block";
+                } else {
+                    explanationEl.style.display = "none";
+                }
+
+                statusEl.textContent = "Done.";
+
+            } catch (err) {
+                statusEl.textContent = "Failed to connect to backend.";
+                console.error(err);
+            }
+        };
+    </script>
+</body>
+
+</html>
